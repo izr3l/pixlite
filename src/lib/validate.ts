@@ -1,4 +1,4 @@
-const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
+const MAX_SIZE = 150 * 1024 * 1024; // 150 MB
 const ALLOWED_MIMES = [
   'image/jpeg',
   'image/png',
@@ -26,9 +26,9 @@ export function validateBatch(files: File[], currentQueueCount: number): { accep
 }
 
 export async function validateFile(file: File): Promise<{ valid: boolean; error?: string }> {
-  // 1. Check file size <= 20MB first (before reading anything to ArrayBuffer)
+  // 1. Check file size <= 150MB first (before reading anything to ArrayBuffer)
   if (file.size > MAX_SIZE) {
-    return { valid: false, error: `${file.name} is too large. Maximum is 20 MB.` };
+    return { valid: false, error: `${file.name} is too large. Maximum is 150 MB.` };
   }
 
   // 2. Check MIME type

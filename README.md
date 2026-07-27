@@ -11,7 +11,7 @@ Users can drag and drop images, configure resize and compression settings, inspe
 - **Smart Compression**: Compress by quality slider or set a target file size (e.g., compress this image to exactly 200KB).
 - **Advanced Resizing**: Lock aspect ratios, use social media presets (Instagram, Twitter/X, LinkedIn), or define custom dimensions.
 - **Metadata Management**: Inspect EXIF data, strip GPS location data for privacy, or remove all metadata completely.
-- **Batch Processing**: Queue up to 20 images at a time (max 20MB each) and process them concurrently with zero UI freezing.
+- **Batch Processing**: Queue up to 20 images at a time (max 150MB each) and process them concurrently with zero UI freezing.
 - **Before & After Preview**: Interactive comparison slider to instantly see quality differences and file size reduction.
 - **ZIP Export**: Download all optimized images in a single ZIP file.
 
