@@ -16,7 +16,7 @@ export default function OutputBar() {
   }
 
   const doneFiles = files.filter(f => f.status === 'done');
-  const canDownloadAll = doneFiles.length >= 2;
+  const canDownloadAll = files.length > 0 && doneFiles.length === files.length;
 
   const handleDownloadAll = async () => {
     if (!canDownloadAll) return;
@@ -32,7 +32,10 @@ export default function OutputBar() {
       });
       
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      saveAs(zipBlob, 'pixlite-optimised.zip');
+      const firstFileName = files[0]?.originalFile.name || 'compressed';
+      const baseName = firstFileName.replace(/\.[^/.]+$/, '');
+      const zipFilename = `${baseName}-compressed.zip`;
+      saveAs(zipBlob, zipFilename);
     } catch (err) {
       console.error('Failed to create ZIP', err);
     } finally {
@@ -56,7 +59,7 @@ export default function OutputBar() {
         </Button>
         
         <Button 
-          className="bg-accent text-background hover:bg-accent-hover h-9 text-[13px] gap-2"
+          className="bg-accent text-background hover:bg-accent-hover h-9 text-[13px] gap-2 disabled:bg-surface-raised disabled:text-text-muted disabled:opacity-50 disabled:border-border"
           disabled={!canDownloadAll || isZipping}
           onClick={handleDownloadAll}
         >

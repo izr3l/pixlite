@@ -71,7 +71,7 @@ const defaultSettings: Settings = {
     maintainAspectRatio: true,
   },
   compress: {
-    outputFormat: 'image/webp',
+    outputFormat: 'original',
     quality: 82,
     useTargetSize: false,
     targetSizeKB: 200,
