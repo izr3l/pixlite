@@ -32,7 +32,7 @@ export default function CompressSettings() {
             <SelectValue placeholder="Select format" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="original">Original (No change)</SelectItem>
+            <SelectItem value="original">Original (HEIC → JPEG)</SelectItem>
             <SelectItem value="image/jpeg">JPEG</SelectItem>
             <SelectItem value="image/png">PNG</SelectItem>
             <SelectItem value="image/webp">WebP</SelectItem>

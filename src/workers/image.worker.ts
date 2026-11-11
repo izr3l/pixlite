@@ -9,6 +9,7 @@ export type WorkerInput = {
   fileBuffer: ArrayBuffer;
   fileName: string;
   fileType: string;
+  originalSize?: number;
   settings: {
     resize: {
       enabled: boolean;
@@ -49,7 +50,7 @@ self.onmessage = async (e: MessageEvent<WorkerInput>) => {
   
   try {
     const originalFile = new File([fileBuffer], fileName, { type: fileType });
-    const originalSize = originalFile.size;
+    const originalSize = e.data.originalSize ?? originalFile.size;
     
     const originalBitmap = await createImageBitmap(originalFile);
     const originalWidth = originalBitmap.width;

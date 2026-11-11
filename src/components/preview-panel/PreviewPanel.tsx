@@ -6,6 +6,7 @@ import ComparisonSlider from './ComparisonSlider';
 import { Button } from '@/components/ui/button';
 import { Loader2, Download } from 'lucide-react';
 import { saveAs } from 'file-saver';
+import { isHeicFile } from '@/lib/validate';
 
 function formatBytes(bytes: number, decimals = 1) {
   if (!+bytes) return '0 Bytes';
@@ -25,7 +26,7 @@ export default function PreviewPanel() {
 
   useEffect(() => {
     if (file) {
-      const oUrl = URL.createObjectURL(file.originalFile);
+      const oUrl = URL.createObjectURL(file.decodedBlob ?? file.originalFile);
       setOriginalUrl(oUrl);
       
       let optUrl: string | null = null;
@@ -141,7 +142,7 @@ export default function PreviewPanel() {
           <div className="flex justify-between items-center">
             <span className="text-[13px] text-text-muted">Format</span>
             <span className="text-[13px] font-medium text-text-primary uppercase">
-              {file.originalFile.type.split('/')[1] || 'Unknown'}
+              {isHeicFile(file.originalFile) ? 'HEIC/HEIF' : file.originalFile.type.split('/')[1] || 'Unknown'}
             </span>
           </div>
           {file.stats && (
@@ -200,7 +201,7 @@ export default function PreviewPanel() {
             <span className="text-[13px] text-text-muted">Metadata</span>
             <span className="text-[13px] font-medium text-text-primary">
               {!isDone ? '-' : 
-                (file.outputBlob && !file.outputBlob.type.includes('jpeg')) ? 'None' :
+                (file.decodedBlob || (file.outputBlob && !file.outputBlob.type.includes('jpeg'))) ? 'None' :
                 settings.metadata.stripAll ? 'None' : 
                 settings.metadata.stripGPSOnly ? 'GPS Removed' : 
                 (file.originalMetadata && Object.keys(file.originalMetadata).length > 0 ? `${Object.keys(file.originalMetadata).length} tags` : 'None')

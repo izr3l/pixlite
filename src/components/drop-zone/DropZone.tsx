@@ -5,6 +5,7 @@ import { ImagePlus } from 'lucide-react';
 import { useImageStore } from '@/store/useImageStore';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { IMAGE_UPLOAD_ACCEPT } from '@/lib/validate';
 
 export default function DropZone() {
   const { files, addFiles } = useImageStore();
@@ -72,7 +73,7 @@ export default function DropZone() {
           ref={inputRef} 
           className="hidden" 
           multiple 
-          accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+          accept={IMAGE_UPLOAD_ACCEPT}
           onChange={handleFileSelect} 
         />
         <span className="text-[14px] font-medium">+ Add more files</span>
@@ -105,7 +106,7 @@ export default function DropZone() {
         ref={inputRef} 
         className="hidden" 
         multiple 
-        accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+        accept={IMAGE_UPLOAD_ACCEPT}
         onChange={handleFileSelect} 
       />
       
@@ -114,8 +115,11 @@ export default function DropZone() {
       </div>
       
       <h2 className="text-[14px] font-medium text-text-primary mb-1">Drop images here</h2>
+      <p className="text-[12px] text-text-muted text-center px-4 mb-1">
+        JPEG, PNG, WebP, AVIF, GIF, HEIC/HEIF &middot; Up to 20 files &middot; 150 MB each
+      </p>
       <p className="text-[12px] text-text-muted mb-6">
-        JPEG, PNG, WebP, AVIF, GIF &middot; Up to 20 files &middot; 150 MB each
+        HEIC/HEIF images are converted to JPEG by default.
       </p>
       
       <Button variant="outline" className="pointer-events-none bg-background text-text-primary hover:bg-surface-raised hover:text-text-primary border-border">

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { validateBatch, validateFile } from '../lib/validate';
+import { isHeicFile, validateBatch, validateFile } from '../lib/validate';
+import { decodeHeic } from '../lib/heic';
 import { parseMetadata } from '../lib/metadata';
 import { toast } from 'sonner';
 
@@ -18,6 +19,7 @@ export type ProcessingStats = {
 export type QueuedFile = {
   id: string;
   originalFile: File;
+  decodedBlob: Blob | null;
   thumbnailUrl: string;
   originalMetadata: Record<string, any> | null;
   status: FileStatus;
@@ -82,7 +84,7 @@ const defaultSettings: Settings = {
   },
 };
 
-async function generateThumbnail(file: File): Promise<string> {
+async function generateThumbnail(file: Blob): Promise<string> {
   try {
     const bitmap = await createImageBitmap(file);
     const canvas = new OffscreenCanvas(48, 48);
@@ -150,13 +152,26 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         continue;
       }
 
+      let decodedBlob: Blob | null = null;
+      if (isHeicFile(file)) {
+        try {
+          decodedBlob = await decodeHeic(file);
+        } catch {
+          toast.error(`${file.name} could not be decoded. Try another HEIC image or convert it to JPEG first.`);
+          continue;
+        }
+      }
+
       const id = crypto.randomUUID();
-      const thumbnailUrl = await generateThumbnail(file);
-      const originalMetadata = await parseMetadata(file);
+      const [thumbnailUrl, originalMetadata] = await Promise.all([
+        generateThumbnail(decodedBlob ?? file),
+        parseMetadata(file),
+      ]);
 
       const queuedFile: QueuedFile = {
         id,
         originalFile: file,
+        decodedBlob,
         thumbnailUrl,
         originalMetadata,
         status: 'pending',
@@ -262,13 +277,19 @@ export const useImageStore = create<ImageStore>((set, get) => ({
               resolve();
             };
 
-            file.originalFile.arrayBuffer().then(buffer => {
+            const processingBlob = file.decodedBlob ?? file.originalFile;
+            const processingSettings = file.decodedBlob && settings.compress.outputFormat === 'original'
+              ? { ...settings, compress: { ...settings.compress, outputFormat: 'image/jpeg' as const } }
+              : settings;
+
+            processingBlob.arrayBuffer().then(buffer => {
               worker.postMessage({
                 id: file.id,
                 fileBuffer: buffer,
                 fileName: file.originalFile.name,
-                fileType: file.originalFile.type,
-                settings,
+                fileType: processingBlob.type,
+                originalSize: file.originalFile.size,
+                settings: processingSettings,
               }, [buffer]);
             }).catch(() => {
               updateFileStatus(file.id, { status: 'error', error: 'Could not read file' });
