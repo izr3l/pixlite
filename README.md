@@ -8,7 +8,7 @@ Users can drag and drop images, configure resize and compression settings, inspe
 
 - **100% Client-Side Processing**: All image resizing, compression, and metadata stripping happens directly in your browser using Web Workers.
 - **Format Conversion**: Convert images between JPEG, PNG, WebP, AVIF, and GIF.
-- **HEIC / HEIF Uploads**: Preview and optimize `.heic` and `.heif` photos locally. With Original selected, these photos export as JPEG; you can also choose another output format. HEIC metadata is available for inspection but is not copied to the converted output.
+- **HEIC / HEIF Uploads**: Preview and optimize `.heic` and `.heif` photos locally. Files appear immediately while decoding, with a visible error if they cannot be opened. With Original selected, these photos export as JPEG; you can also choose another output format. HEIC metadata is available for inspection but is not copied to the converted output.
 - **Smart Compression**: Compress by quality slider or set a target file size (e.g., compress this image to exactly 200KB).
 - **Advanced Resizing**: Lock aspect ratios, use social media presets (Instagram, Twitter/X, LinkedIn), or define custom dimensions.
 - **Metadata Management**: Inspect EXIF data, strip GPS location data for privacy, or remove all metadata completely.
@@ -26,7 +26,7 @@ Users can drag and drop images, configure resize and compression settings, inspe
 - **Image Processing**:
   - `browser-image-compression` (Client-side compression)
   - `exifr` (EXIF reading)
-  - `heic-to` (HEIC/HEIF decoding in a Web Worker, loaded only for HEIC uploads)
+  - `heic-to` (HEIC/HEIF fallback decoding in a fresh Web Worker per image, loaded only when native decoding is unavailable)
   - `piexifjs` (EXIF stripping)
 - **Export**: `jszip`, `file-saver`
 

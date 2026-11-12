@@ -25,6 +25,7 @@ function formatBytes(bytes: number, decimals = 1) {
 }
 
 export default function FileQueueItem({ file, onRemove, isSelected, onClick }: FileQueueItemProps) {
+  const isLoading = file.status === 'loading';
   const isProcessing = file.status === 'processing';
   const isDone = file.status === 'done';
   const isError = file.status === 'error';
@@ -71,10 +72,10 @@ export default function FileQueueItem({ file, onRemove, isSelected, onClick }: F
               </Badge>
             )}
             
-            {isProcessing && (
-              <div className="flex items-center gap-2 text-[12px] text-accent">
+            {(isLoading || isProcessing) && (
+              <div role="status" className="flex items-center gap-2 text-[12px] text-accent">
                 <Loader2 size={14} className="animate-spin" />
-                <span>{file.progressStep || 'Processing...'}</span>
+                <span>{file.progressStep || (isLoading ? 'Loading image...' : 'Processing...')}</span>
               </div>
             )}
             
@@ -110,6 +111,12 @@ export default function FileQueueItem({ file, onRemove, isSelected, onClick }: F
             )}
           </div>
         </div>
+
+        {isError && (
+          <p className="mt-2 text-[12px] text-error" role="alert">
+            {file.error || 'Could not load or process this image.'}
+          </p>
+        )}
 
         {/* Progress Bar */}
         {isProcessing && (

@@ -21,31 +21,25 @@ export default function PreviewPanel() {
   const { files, selectedFileId, settings } = useImageStore();
   const file = files.find(f => f.id === selectedFileId);
 
-  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
-  const [optimisedUrl, setOptimisedUrl] = useState<string | null>(null);
+  const [{ originalUrl, optimisedUrl }, setPreviewUrls] = useState<{
+    originalUrl: string | null;
+    optimisedUrl: string | null;
+  }>({ originalUrl: null, optimisedUrl: null });
+  const originalBlob = file?.decodedBlob ?? (file && !isHeicFile(file.originalFile) ? file.originalFile : null);
+  const outputBlob = file?.outputBlob ?? null;
 
   useEffect(() => {
-    if (file) {
-      const oUrl = URL.createObjectURL(file.decodedBlob ?? file.originalFile);
-      setOriginalUrl(oUrl);
-      
-      let optUrl: string | null = null;
-      if (file.outputBlob) {
-        optUrl = URL.createObjectURL(file.outputBlob);
-        setOptimisedUrl(optUrl);
-      } else {
-        setOptimisedUrl(null);
-      }
+    const oUrl = originalBlob ? URL.createObjectURL(originalBlob) : null;
+    const optUrl = outputBlob ? URL.createObjectURL(outputBlob) : null;
+    // Object URLs are browser resources created and released with the source blobs.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPreviewUrls({ originalUrl: oUrl, optimisedUrl: optUrl });
 
-      return () => {
-        URL.revokeObjectURL(oUrl);
-        if (optUrl) URL.revokeObjectURL(optUrl);
-      };
-    } else {
-      setOriginalUrl(null);
-      setOptimisedUrl(null);
-    }
-  }, [file]);
+    return () => {
+      if (oUrl) URL.revokeObjectURL(oUrl);
+      if (optUrl) URL.revokeObjectURL(optUrl);
+    };
+  }, [originalBlob, outputBlob]);
 
   if (!file) {
     return (
@@ -61,6 +55,7 @@ export default function PreviewPanel() {
     );
   }
 
+  const isLoading = file.status === 'loading';
   const isProcessing = file.status === 'processing';
   const isDone = file.status === 'done';
   const isError = file.status === 'error';
@@ -93,14 +88,21 @@ export default function PreviewPanel() {
       <div className="flex-1 relative bg-[url('/checkerboard.png')] bg-repeat" style={{ backgroundImage: 'linear-gradient(45deg, #1e1e1e 25%, transparent 25%), linear-gradient(-45deg, #1e1e1e 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1e1e1e 75%), linear-gradient(-45deg, transparent 75%, #1e1e1e 75%)', backgroundSize: '20px 20px', backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px' }}>
         
         {isError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10">
+          <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-10 p-5">
             <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center mb-4 text-error">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <div className="text-text-primary text-[15px] font-medium mb-1">Processing Failed</div>
+            <div className="text-text-primary text-[15px] font-medium mb-1">{isHeicFile(file.originalFile) && !file.decodedBlob ? 'Could not open image' : 'Processing Failed'}</div>
             <div className="text-text-muted text-[13px] text-center max-w-md">{file.error}</div>
+          </div>
+        )}
+
+        {isLoading && (
+          <div role="status" className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 z-10">
+            <Loader2 className="w-8 h-8 text-accent animate-spin" />
+            <div className="text-[14px] text-text-primary">{file.progressStep || 'Loading image...'}</div>
           </div>
         )}
 
