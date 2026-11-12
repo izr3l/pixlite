@@ -7,14 +7,17 @@ const ALLOWED_MIMES = [
   'image/gif',
   'image/heic',
   'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
 ];
 
 export const IMAGE_UPLOAD_ACCEPT = [...ALLOWED_MIMES, '.heic', '.heif'].join(',');
 
 export function isHeicFile(file: Pick<File, 'name' | 'type'>): boolean {
   const mime = file.type.toLowerCase();
-  return mime === 'image/heic' || mime === 'image/heif' ||
-    ((!mime || mime === 'application/octet-stream') && /\.(heic|heif)$/i.test(file.name));
+  // Browser/OS MIME mappings vary. The extension is only a hint; validateFile
+  // still requires a matching HEIF container before the decoder sees the file.
+  return /^image\/hei[cf](?:-sequence)?$/.test(mime) || /\.(heic|heif)$/i.test(file.name);
 }
 
 export function validateBatch(files: File[], currentQueueCount: number): { accepted: File[], rejectedCount: number } {
@@ -41,7 +44,7 @@ export async function validateFile(file: File): Promise<{ valid: boolean; error?
     return { valid: false, error: `${file.name} is too large. Maximum is 150 MB.` };
   }
 
-  // Some operating systems leave the MIME type of HEIC/HEIF files unset.
+  // Some operating systems leave HEIC/HEIF MIME types unset or misidentify them.
   // Extension fallback still requires a matching file signature below.
   const isHeic = isHeicFile(file);
   if (!ALLOWED_MIMES.includes(file.type) && !isHeic) {
@@ -60,8 +63,8 @@ export async function validateFile(file: File): Promise<{ valid: boolean; error?
 }
 
 function checkHeicSignature(bytes: Uint8Array, fileSize: number): boolean {
-  // HEIC uses an ISO BMFF ftyp box. mif1 alone is insufficient: AVIF and
-  // other codecs share the HEIF container, so require a HEVC-specific brand.
+  // HEIF may advertise only its generic mif1/msf1 brand, even when the pixels
+  // are HEVC. Check the container here; decoding validates the actual image.
   if (bytes.length < 16 || String.fromCharCode(...bytes.slice(4, 8)) !== 'ftyp') return false;
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -75,7 +78,7 @@ function checkHeicSignature(bytes: Uint8Array, fileSize: number): boolean {
   }
 
   if (brands.includes('avif') || brands.includes('avis')) return false;
-  return brands.some(brand => ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs'].includes(brand));
+  return brands.some(brand => ['mif1', 'msf1', 'heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs'].includes(brand));
 }
 
 function checkMagicBytes(bytes: Uint8Array, mime: string): boolean {

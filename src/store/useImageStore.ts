@@ -4,7 +4,7 @@ import { decodeHeic } from '../lib/heic';
 import { parseMetadata } from '../lib/metadata';
 import { toast } from 'sonner';
 
-export type FileStatus = 'pending' | 'processing' | 'done' | 'error';
+export type FileStatus = 'loading' | 'pending' | 'processing' | 'done' | 'error';
 
 export type ProcessingStats = {
   originalSize: number;
@@ -21,7 +21,7 @@ export type QueuedFile = {
   originalFile: File;
   decodedBlob: Blob | null;
   thumbnailUrl: string;
-  originalMetadata: Record<string, any> | null;
+  originalMetadata: Record<string, unknown> | null;
   status: FileStatus;
   progress: number;
   progressStep: string;
@@ -53,6 +53,7 @@ export type Settings = {
 
 type ImageStore = {
   files: QueuedFile[];
+  uploadGeneration: number;
   settings: Settings;
   selectedFileId: string | null;
   addFiles: (files: File[]) => Promise<void>;
@@ -100,21 +101,33 @@ async function generateThumbnail(file: Blob): Promise<string> {
 
     const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
     return URL.createObjectURL(blob);
-  } catch (e) {
+  } catch {
     // fallback
     return URL.createObjectURL(file);
   }
 }
 
+async function prepareImage(file: File) {
+  const decodedBlob = isHeicFile(file) ? await decodeHeic(file) : null;
+  const thumbnailUrl = await generateThumbnail(decodedBlob ?? file);
+  return { decodedBlob, thumbnailUrl };
+}
+
+function uploadError(file: File, error: unknown): string {
+  const reason = error instanceof Error ? error.message : 'Please try adding the image again.';
+  return `Could not load ${file.name}. ${reason}`;
+}
+
 export const useImageStore = create<ImageStore>((set, get) => ({
   files: [],
+  uploadGeneration: 0,
   settings: defaultSettings,
   selectedFileId: null,
   
   setSelectedFile: (id) => set({ selectedFileId: id }),
   
   addFiles: async (newFiles) => {
-    const { files } = get();
+    const { files, uploadGeneration } = get();
     
     const uniqueNewFiles: File[] = [];
     let duplicateCount = 0;
@@ -145,46 +158,83 @@ export const useImageStore = create<ImageStore>((set, get) => ({
       toast.error(`${rejectedCount} files were not added. Maximum is 20 files.`);
     }
 
+    const queuedFiles: QueuedFile[] = [];
     for (const file of accepted) {
-      const validation = await validateFile(file);
+      let validation;
+      try {
+        validation = await validateFile(file);
+      } catch (error) {
+        if (get().uploadGeneration !== uploadGeneration) break;
+        toast.error(uploadError(file, error));
+        continue;
+      }
+      if (get().uploadGeneration !== uploadGeneration) break;
       if (!validation.valid) {
         toast.error(validation.error);
         continue;
       }
 
-      let decodedBlob: Blob | null = null;
-      if (isHeicFile(file)) {
-        try {
-          decodedBlob = await decodeHeic(file);
-        } catch {
-          toast.error(`${file.name} could not be decoded. Try another HEIC image or convert it to JPEG first.`);
-          continue;
-        }
+      // Recheck after validation, since another upload may have filled the queue.
+      const currentFiles = get().files;
+      if (currentFiles.some(existing => existing.originalFile.name === file.name &&
+        existing.originalFile.size === file.size && existing.originalFile.lastModified === file.lastModified)) {
+        toast.info(`${file.name} is already in the queue.`);
+        continue;
+      }
+      if (currentFiles.length >= 20) {
+        toast.error(`${file.name} was not added. Maximum is 20 files.`);
+        continue;
       }
 
-      const id = crypto.randomUUID();
-      const [thumbnailUrl, originalMetadata] = await Promise.all([
-        generateThumbnail(decodedBlob ?? file),
-        parseMetadata(file),
-      ]);
-
       const queuedFile: QueuedFile = {
-        id,
+        id: crypto.randomUUID(),
         originalFile: file,
-        decodedBlob,
-        thumbnailUrl,
-        originalMetadata,
-        status: 'pending',
+        decodedBlob: null,
+        thumbnailUrl: '',
+        originalMetadata: null,
+        status: 'loading',
         progress: 0,
-        progressStep: '',
+        progressStep: isHeicFile(file) ? 'Opening HEIC image...' : 'Loading image...',
         outputBlob: null,
         outputFilename: null,
         stats: null,
         error: null,
       };
 
-      set((state) => ({ files: [...state.files, queuedFile] }));
+      queuedFiles.push(queuedFile);
+      set((state) => ({
+        files: [...state.files, queuedFile],
+        selectedFileId: state.selectedFileId ?? queuedFile.id,
+      }));
     }
+
+    // Queue every validated file before awaiting the more expensive HEIC decoder.
+    let prepareIndex = 0;
+    const prepareNext = async () => {
+      while (prepareIndex < queuedFiles.length) {
+        const queuedFile = queuedFiles[prepareIndex++];
+        if (!get().files.some(file => file.id === queuedFile.id)) continue;
+        try {
+          const prepared = await prepareImage(queuedFile.originalFile);
+          if (!get().files.some(file => file.id === queuedFile.id)) {
+            URL.revokeObjectURL(prepared.thumbnailUrl);
+            continue;
+          }
+          get().updateFileStatus(queuedFile.id, { ...prepared, status: 'pending', progressStep: '' });
+          // Optional metadata must not hold up the preview or the processing controls.
+          void parseMetadata(queuedFile.originalFile).then(originalMetadata => {
+            get().updateFileStatus(queuedFile.id, { originalMetadata });
+          });
+        } catch (error) {
+          if (!get().files.some(file => file.id === queuedFile.id)) continue;
+          const message = uploadError(queuedFile.originalFile, error);
+          get().updateFileStatus(queuedFile.id, { status: 'error', error: message, progressStep: '' });
+          toast.error(message);
+        }
+      }
+    };
+    // One slow HEIC must not prevent the other queued images from opening.
+    await Promise.all(Array.from({ length: Math.min(3, queuedFiles.length) }, prepareNext));
   },
 
   removeFile: (id) => set((state) => {
@@ -195,14 +245,18 @@ export const useImageStore = create<ImageStore>((set, get) => ({
     if (file && file.outputBlob) {
       // we might want to revoke outputBlob URL if we created one, but we haven't
     }
-    return { files: state.files.filter(f => f.id !== id) };
+    const remainingFiles = state.files.filter(f => f.id !== id);
+    return {
+      files: remainingFiles,
+      selectedFileId: state.selectedFileId === id ? remainingFiles[0]?.id ?? null : state.selectedFileId,
+    };
   }),
 
   clearAll: () => set((state) => {
     state.files.forEach(f => {
       if (f.thumbnailUrl) URL.revokeObjectURL(f.thumbnailUrl);
     });
-    return { files: [] };
+    return { files: [], selectedFileId: null, uploadGeneration: state.uploadGeneration + 1 };
   }),
 
   updateFileStatus: (id, update) => set((state) => ({
@@ -234,6 +288,27 @@ export const useImageStore = create<ImageStore>((set, get) => ({
         updateFileStatus(file.id, { status: 'processing', progress: 0, progressStep: 'Starting...', error: null });
 
         try {
+          let decodedBlob = file.decodedBlob;
+          // A failed HEIC import can be retried with a fresh decoder.
+          if (isHeicFile(file.originalFile) && !decodedBlob) {
+            updateFileStatus(file.id, { status: 'loading', progressStep: 'Opening HEIC image...' });
+            try {
+              const prepared = await prepareImage(file.originalFile);
+              if (!get().files.some(queued => queued.id === file.id)) {
+                URL.revokeObjectURL(prepared.thumbnailUrl);
+                continue;
+              }
+              decodedBlob = prepared.decodedBlob;
+              updateFileStatus(file.id, { ...prepared, status: 'processing', progressStep: 'Starting...' });
+              void parseMetadata(file.originalFile).then(originalMetadata => {
+                updateFileStatus(file.id, { originalMetadata });
+              });
+            } catch (error) {
+              updateFileStatus(file.id, { status: 'error', error: uploadError(file.originalFile, error), progressStep: '' });
+              continue;
+            }
+          }
+
           await new Promise<void>((resolve) => {
             const worker = new Worker(new URL('../workers/image.worker.ts', import.meta.url), { type: 'module' });
             
@@ -277,8 +352,8 @@ export const useImageStore = create<ImageStore>((set, get) => ({
               resolve();
             };
 
-            const processingBlob = file.decodedBlob ?? file.originalFile;
-            const processingSettings = file.decodedBlob && settings.compress.outputFormat === 'original'
+            const processingBlob = decodedBlob ?? file.originalFile;
+            const processingSettings = decodedBlob && settings.compress.outputFormat === 'original'
               ? { ...settings, compress: { ...settings.compress, outputFormat: 'image/jpeg' as const } }
               : settings;
 
@@ -297,7 +372,7 @@ export const useImageStore = create<ImageStore>((set, get) => ({
               resolve();
             });
           });
-        } catch (err) {
+        } catch {
           updateFileStatus(file.id, { status: 'error', error: 'Unexpected error' });
         }
       }

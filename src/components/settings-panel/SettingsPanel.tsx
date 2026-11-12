@@ -14,10 +14,12 @@ export default function SettingsPanel() {
 
   const unprocessedFiles = files.filter(f => f.status === 'pending' || f.status === 'error');
   const isProcessing = files.some(f => f.status === 'processing');
+  const isLoading = files.some(f => f.status === 'loading');
   
-  const canProcess = unprocessedFiles.length > 0 && !isProcessing;
+  const canProcess = unprocessedFiles.length > 0 && !isProcessing && !isLoading;
 
   const getButtonText = () => {
+    if (isLoading) return 'Preparing images...';
     if (isProcessing) return 'Processing...';
     if (unprocessedFiles.length === 0) return 'Process files';
     if (unprocessedFiles.length === 1) return 'Process 1 file';
@@ -67,7 +69,7 @@ export default function SettingsPanel() {
           disabled={!canProcess}
           onClick={processAll}
         >
-          {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {(isProcessing || isLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {getButtonText()}
         </Button>
       </div>
